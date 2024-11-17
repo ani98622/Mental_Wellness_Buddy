@@ -1,0 +1,14 @@
+pandas
+mesop
+datasets
+langchain-groq
+python-dotenv
+langchain_community
+pyttsx3
+plotly
+matplotlib
+pymysql
+mysql
+mysql-connector-python
+langchain_core
+
