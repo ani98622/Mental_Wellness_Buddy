@@ -16,17 +16,15 @@ load_dotenv()
 groq_api_key = os.getenv('GROQ_API_KEY')
 
 PASSWORD = os.getenv('PASSWORD')
-print(PASSWORD)
-
-global session_chat
 
 @me.stateclass
 class State:
     user_id: str = ""
     password: str = ""
     logged_in: bool = False 
-    selected_values: list[str]
-    mock_stats : dict[str]  
+    selected_values: list[str] = None
+    mock_stats : dict[str,int]  = None
+
 
 def get_ip_address():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -42,7 +40,7 @@ def get_ip_address():
 
 def is_office_network(ip_address):
     office_ip_range_start = '172.16.2.100'
-    office_ip_range_end = '172.16.2.300'
+    office_ip_range_end = '172.16.2.301'
 
     ip_num = int(''.join([f"{int(part):02x}" for part in ip_address.split('.')]), 16)
     start_num = int(''.join([f"{int(part):02x}" for part in office_ip_range_start.split('.')]), 16)
@@ -92,7 +90,6 @@ def get_system_id():
     
     else:
         return "Unsupported operating system."
-
 
 session_chat = ChatMessageHistory()
 
@@ -165,7 +162,6 @@ def session_done(session_chat=session_chat, llm = llm):
 #     session_chat = ChatMessageHistory()
 #     me.navigate('/main_page/chat_bot/')
 
-
 def give_personalinfo(s_id, chat, llm):
     personal_info = Get_PersonalInfo(s_id = s_id)
     if personal_info:
@@ -230,7 +226,7 @@ def transform(input: str = "", history: list[mel.ChatMessage] = []):
     check_text_and_alert(input, alert_email, PASSWORD)
     return text
 
-@me.page(path="/Hr/dashboard")
+@me.page(path="/Hr/dashboard",title='HR_dashboard')
 def hr_dashboard_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -242,7 +238,7 @@ def hr_dashboard_page():
     else:
         me.navigate("")
 
-@me.page(path="/Hr/barplot")
+@me.page(path="/Hr/barplot",title='barplot')
 def barplot_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -278,7 +274,7 @@ def on_selection_change(e: me.SelectSelectionChangeEvent):
     s = me.state(State)
     s.selected_values = e.values
 
-@me.page(path="/Hr/try_again")
+@me.page(path="/Hr/try_again", title='Try Again')
 def try_again_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -295,7 +291,7 @@ def clear_login(e: me.ClickEvent):
         state.password=""
         me.navigate("/Hr")
            
-@me.page(path="/Hr")
+@me.page(path="/Hr",title = 'Login Page')
 def hr_login_page():
     state = me.state(State)
     me.text("HR Login", type="headline-4")
@@ -317,7 +313,7 @@ def hr_login_page():
     me.button("Login", on_click=handle_login, type="flat")
     me.button("back", on_click=lambda e: me.navigate("/"), type="flat")
 
-@me.page(path="/")
+@me.page(path="/",title="Main Page")
 def main_page():
     me.text("Welcome to Med Buddy!", type="headline-2")
     user_ip = get_ip_address()

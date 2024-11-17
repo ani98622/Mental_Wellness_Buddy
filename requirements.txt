@@ -12,3 +12,4 @@ mysql
 mysql-connector-python
 langchain_core
 
+

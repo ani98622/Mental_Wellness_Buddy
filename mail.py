@@ -37,5 +37,3 @@ def check_text_and_alert(text, alert_email, PASSWORD):
             body=f"An employee may be at risk based on the following input:\n\n{text}",
             PASSWORD=PASSWORD
         )
-
-
