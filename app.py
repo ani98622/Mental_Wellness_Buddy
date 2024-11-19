@@ -8,23 +8,42 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from visuals import generate_bar_chart, get_date_range
 from mail import check_text_and_alert
-
-
-alert_email = "roykironmoy@gmail.com"
-
 load_dotenv()
-groq_api_key = os.getenv('GROQ_API_KEY')
-
-PASSWORD = os.getenv('PASSWORD')
 
 @me.stateclass
 class State:
-    user_id: str = ""
-    password: str = ""
-    logged_in: bool = False 
-    selected_values: list[str] = None
-    mock_stats : dict[str,int]  = None
+    user_id: str 
+    password: str 
+    logged_in: bool = False
+    selected_values: list[str] = None 
 
+alert_email = "roykironmoy@gmail.com"
+
+groq_api_key = os.getenv('GROQ_API_KEY')
+PASSWORD = os.getenv('PASSWORD')
+office_ip_range_start = os.getenv('office_ip_range_start')
+office_ip_range_end = os.getenv('office_ip_range_end')
+
+
+def on_load(e: me.LoadEvent):
+    me.set_theme_mode("system")
+
+@me.page(
+    path="/",
+    title="Mesop Demo Chat",
+    on_load=on_load,
+)
+def main_page():
+    me.text("Welcome to Med Buddy!", type="headline-2")
+    user_ip = get_ip_address()
+    # print(f"Detected IP: {user_ip}")
+
+    if is_office_network(user_ip):
+        with me.box(style=me.Style(display="flex", flex_direction="column", gap=20)):
+            me.button("Start Chatting", on_click=lambda e: me.navigate("/chat"), type="flat", color="accent")
+            me.button("HR Login", on_click=lambda e: me.navigate("/Hr"), type="flat", color="accent")
+    else:
+        me.text("Access denied. Please connect to the office Wi-Fi.", type="headline-3")
 
 def get_ip_address():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,9 +58,7 @@ def get_ip_address():
     return ip_address
 
 def is_office_network(ip_address):
-    office_ip_range_start = '172.16.2.100'
-    office_ip_range_end = '172.16.2.301'
-
+    
     ip_num = int(''.join([f"{int(part):02x}" for part in ip_address.split('.')]), 16)
     start_num = int(''.join([f"{int(part):02x}" for part in office_ip_range_start.split('.')]), 16)
     end_num = int(''.join([f"{int(part):02x}" for part in office_ip_range_end.split('.')]), 16)
@@ -64,32 +81,22 @@ def on_password_input(e: me.InputEvent):
 
 def get_system_id():
     system = platform.system()
-    
-    if system == 'Windows':
-        try:
-            # Use PowerShell to get the UUID
-            output = subprocess.check_output(["powershell", "-Command", "(Get-WmiObject -Class Win32_ComputerSystemProduct).UUID"], text=True)
-            uuid = output.strip()
-            if uuid:
-                return uuid
-            else:
-                return "UUID not found or command output is empty."
-        except subprocess.CalledProcessError as e:
-            return f"An error occurred on Windows: {e}"
-    
-    elif system == 'Darwin':  
-        try:
-            # macOS command to retrieve Hardware UUID
+    try:
+        if system == 'Windows':
+            output = subprocess.check_output(
+                ["powershell", "-Command", "(Get-WmiObject -Class Win32_ComputerSystemProduct).UUID"], 
+                text=True
+            )
+            return output.strip() if output.strip() else "UUID not found."
+        elif system == 'Darwin':
             result = subprocess.run(['system_profiler', 'SPHardwareDataType'], capture_output=True, text=True)
             for line in result.stdout.splitlines():
                 if 'Hardware UUID' in line:
                     return line.split(': ')[1].strip()
-            return "Hardware UUID not found."
-        except Exception as e:
-            return f"An error occurred on macOS: {e}"
-    
-    else:
-        return "Unsupported operating system."
+        return "Unsupported operating system or error."
+    except Exception as e:
+        return f"Error fetching UUID: {e}"
+
 
 session_chat = ChatMessageHistory()
 
@@ -143,18 +150,32 @@ def get_sessionchat():
 def update_info():
     s_id = get_system_id()
     past_info = Get_PersonalInfo(s_id)
-    return 
+    return past_info
 
-def session_done(session_chat=session_chat, llm = llm):
+def session_done(session_chat=session_chat, llm=llm):
+    # chat = str(session_chat)
+    # print(chat)
     s_id = get_system_id()
     print(s_id)
+    
     chat = get_sessionchat()
-    print(chat[:10])
-    info = give_personalinfo(s_id = s_id, chat = chat, llm = llm)
-    Add_Chathistory(s_id = s_id, chat = chat)
-    add_data(s_id = s_id, chat = chat, llm = llm)
-    UpdateOrAdd_PersonalInfo(s_id = s_id, info = info)
+    
+    chat = str(session_chat)
+    print(chat)
+
+    if chat.strip(): 
+        print(chat[:10])  # For debugging purposes, can be removed later
+        info = give_personalinfo(s_id=s_id, chat=chat, llm=llm)
+        Add_Chathistory(s_id=s_id, chat=chat)
+        add_data(s_id=s_id, chat=chat, llm=llm)
+        UpdateOrAdd_PersonalInfo(s_id=s_id, info=info)
+    else:
+        me.text("No conversation to save. Please start a chat before clicking 'Done'.", type="headline-4")
+          
     me.navigate("/")
+
+    #  can we navigate before these add happen?
+
 
 # EDIT THIS FUNCTION PROPERLY 
 
@@ -201,22 +222,11 @@ def give_personalinfo(s_id, chat, llm):
     info = chain.invoke({"input": "summary"}).content
     return info
 
-def on_load(e: me.LoadEvent):
-    me.set_theme_mode("system")
 
-@me.page(
-    security_policy=me.SecurityPolicy(
-        allowed_iframe_parents=["https://google.github.io", "https://huggingface.co"]
-    ),
-    path="/main_page/chat_bot",
-    title="Mesop Demo Chat",
-    on_load=on_load,
-)
-
+@me.page(path='/chat',title='Chat',on_load=on_load)
 def chat_page():  
     mel.chat(transform, title="Mental Wellness Buddy", bot_user="Wellness Buddy")
     me.button(label = "Done", on_click=session_done)
-    # me.button(label = "Clear", on_click=clear_chat)
 
 def transform(input: str = "", history: list[mel.ChatMessage] = []):
     session_id = get_system_id()
@@ -226,7 +236,7 @@ def transform(input: str = "", history: list[mel.ChatMessage] = []):
     check_text_and_alert(input, alert_email, PASSWORD)
     return text
 
-@me.page(path="/Hr/dashboard",title='HR_dashboard')
+@me.page(path="/Hr/dashboard",title='HR_dashboard',on_load=on_load,)
 def hr_dashboard_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -238,7 +248,7 @@ def hr_dashboard_page():
     else:
         me.navigate("")
 
-@me.page(path="/Hr/barplot",title='barplot')
+@me.page(path="/Hr/barplot",title='barplot', on_load=on_load,)
 def barplot_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -274,7 +284,7 @@ def on_selection_change(e: me.SelectSelectionChangeEvent):
     s = me.state(State)
     s.selected_values = e.values
 
-@me.page(path="/Hr/try_again", title='Try Again')
+@me.page(path="/Hr/try_again", title='Try Again',on_load=on_load,)
 def try_again_page():
     state = me.state(State)
     if state.user_id and state.password:
@@ -291,35 +301,25 @@ def clear_login(e: me.ClickEvent):
         state.password=""
         me.navigate("/Hr")
            
-@me.page(path="/Hr",title = 'Login Page')
+@me.page(path="/Hr",title = 'Login Page',on_load=on_load,)
 def hr_login_page():
-    state = me.state(State)
     me.text("HR Login", type="headline-4")
     me.text("Enter your HR credentials to access the dashboard.", type="body-1")
 
     me.input(label="Username", on_input=on_user_id_input) 
     me.input(label="Password", type="password", on_input=on_password_input)  
-    
+
     def handle_login(e: me.ClickEvent):
         state = me.state(State)
         if state.user_id and state.password:
             user = Admin_Login(state.user_id, state.password)
-            if user == True:
+            if user:
                 state.logged_in = True
                 me.navigate("/Hr/dashboard")
-            else:
+            elif user is False:
                 me.navigate("/Hr/try_again")
-    
+            else:
+                me.text("Unexpected error occurred. Contact support.", type="error")
+
     me.button("Login", on_click=handle_login, type="flat")
     me.button("back", on_click=lambda e: me.navigate("/"), type="flat")
-
-@me.page(path="/",title="Main Page")
-def main_page():
-    me.text("Welcome to Med Buddy!", type="headline-2")
-    user_ip = get_ip_address()
-    if is_office_network(user_ip):
-        with me.box(style=me.Style(display="flex", flex_direction="column", gap=20)):
-            me.button("Start Chatting", on_click=lambda e: me.navigate("/main_page/chat_bot"), type="flat", color="accent")
-            me.button("HR Login", on_click=lambda e: me.navigate("/Hr"), type="flat", color="accent")
-    else:
-        me.text("Access denied. Please connect to the office Wi-Fi.",type="headline-3")
